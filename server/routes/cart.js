@@ -4,7 +4,8 @@ import {
   addToCart,
   updateCartItem,
   removeFromCart,
-  clearCart
+  clearCart,
+  placeOrderFromCart
 } from '../controllers/cart.js';
 import { authMiddleware } from '../middleware/auth.js';
 
@@ -17,6 +18,7 @@ router.get('/', getCart);
 router.post('/add', addToCart);
 router.put('/item/:itemId', updateCartItem);
 router.delete('/item/:itemId', removeFromCart);
-router.delete('/clear/:_id', clearCart);
+router.delete('/clear', clearCart);
+router.post('/place-order', placeOrderFromCart);
 
 export default router;

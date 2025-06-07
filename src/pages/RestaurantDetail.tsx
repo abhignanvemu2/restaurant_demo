@@ -48,17 +48,8 @@ const RestaurantDetail = () => {
         // Fetch restaurant details
         const restaurantData = await restaurantAPI.getById(id);
         
-        // Check if user is restricted by country
-        // if (user?.country ) {
-        //   toast.error('Cannot view restaurants from different countries');
-        //   navigate('/restaurants');
-        //   return;
-        // }
-        
         // Fetch menu items
         const menuData = await menuAPI.getByRestaurant(id);
-        // console.log("🚀 ~ loadRestaurantData ~ menuResponse:", menuResponse)
-        // const menuData = menuResponse.data;
         
         // Extract unique categories
         const uniqueCategories: any = Array.from(

@@ -193,8 +193,11 @@ export const cartAPI = {
     return api.delete(`/cart/item/${itemId}`);
   },
 
-  clear: (_id: string) => {
-    console.log('im here with _id:', _id)
-    return api.delete(`/cart/clear/${_id}`);
+  clear: () => {
+    return api.delete(`/cart/clear/`);
+  },
+
+   placeOrder: (selectedItems: string[], deliveryAddress: string, paymentMethod: string) => {
+    return api.post('/cart/place-order', { selectedItems, deliveryAddress, paymentMethod });
   }
 };

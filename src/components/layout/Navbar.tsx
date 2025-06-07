@@ -86,7 +86,6 @@ const Navbar = ({ onCartClick }: NavbarProps) => {
   }
   
   const cartItemCount = items.length;
-  console.log("🚀 ~ Navbar ~ cartItemCount:", cartItemCount)
 
   return (
     <header 

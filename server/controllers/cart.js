@@ -1,36 +1,67 @@
 import Cart from '../models/Cart.js';
 import MenuItem from '../models/MenuItem.js';
-import Restaurant from '../models/Restaurant.js';
+import Order from '../models/Order.js'
 
 export const getCart = async (req, res) => {
   try {
-    let carts;
-
-    const userRole = req.user.role;
-    const userId = req.user._id;
-    const userCountry = req.user.country;
-
-    if (userRole == 'admin' || userRole == 'manager') {
-      carts = await Cart.find()
+    // If user is admin or manager, get all carts
+    const country = req.user.country
+    if (['admin', 'manager'].includes(req.user.role)) {
+      const carts = await Cart.find({})
+        .populate('userId', 'name email country')
         .populate({
           path: 'restaurantId',
           select: 'name country',
-          match: { country: userCountry },
+          match: { country: country },
         })
-        .populate('userId', 'name email') 
-        .populate('items.menuItemId', 'name price image');
-
-      carts = carts.filter(cart => cart.restaurantId !== null);
-    } else {
-      // Members: only their cart
-      carts = await Cart.find({ userId })
-        .populate('restaurantId', 'name country')
-        .populate('items.menuItemId', 'name price image');
-      }
-      console.log("🚀 ~ getCart ~ carts:", carts)
-
-    // Member with no cart: return empty structure
-    if (userRole == 'member' && carts.length == 0) {
+        .populate('items.menuItemId', 'name price image')
+        .sort({ updatedAt: -1 });
+      
+      // Combine all cart items into a single response
+      const allItems = [];
+      let totalSubtotal = 0;
+      let totalTax = 0;
+      let totalDeliveryFee = 0;
+      let totalAmount = 0;
+      
+      carts.forEach(cart => {
+        cart.items.forEach(item => {
+          allItems.push({
+            ...item.toObject(),
+            cartId: cart._id,
+            userId: cart.userId._id,
+            userName: cart.userId.name,
+            userEmail: cart.userId.email,
+            userCountry: cart.userId.country,
+            restaurantName: cart.restaurantName,
+            restaurantCountry: cart.restaurantId.country
+          });
+        });
+        totalSubtotal += cart.subtotal;
+        totalTax += cart.tax;
+        totalDeliveryFee += cart.deliveryFee;
+        totalAmount += cart.total;
+      });
+      
+      return res.json({
+        items: allItems,
+        subtotal: totalSubtotal,
+        tax: totalTax,
+        deliveryFee: totalDeliveryFee,
+        total: totalAmount,
+        restaurantId: null,
+        restaurantName: 'Multiple Restaurants',
+        isAdminView: true,
+        totalCarts: carts.length
+      });
+    }
+    
+    // For regular users, get their own cart
+    const cart = await Cart.findOne({ userId: req.user._id })
+      .populate('restaurantId', 'name country')
+      .populate('items.menuItemId', 'name price image');
+    
+    if (!cart) {
       return res.json({
         items: [],
         subtotal: 0,
@@ -39,15 +70,18 @@ export const getCart = async (req, res) => {
         total: 0,
         restaurantId: null,
         restaurantName: null,
+        isAdminView: false
       });
     }
-
-    res.json(carts);
+    
+    res.json({
+      ...cart.toObject(),
+      isAdminView: false
+    });
   } catch (error) {
     res.status(500).json({ message: 'Error fetching cart', error: error.message });
   }
 };
-
 
 export const addToCart = async (req, res) => {
   try {
@@ -126,7 +160,14 @@ export const updateCartItem = async (req, res) => {
       return res.status(400).json({ message: 'Quantity must be at least 1' });
     }
     
-    const cart = await Cart.findOne({ userId: req.user._id });
+    // For admin/manager, find cart by item ID across all carts
+    let cart;
+    if (['admin', 'manager'].includes(req.user.role)) {
+      cart = await Cart.findOne({ 'items._id': itemId });
+    } else {
+      cart = await Cart.findOne({ userId: req.user._id });
+    }
+    
     if (!cart) {
       return res.status(404).json({ message: 'Cart not found' });
     }
@@ -139,11 +180,17 @@ export const updateCartItem = async (req, res) => {
     cart.items[itemIndex].quantity = quantity;
     await cart.save();
     
-    const populatedCart = await Cart.findById(cart._id)
-      .populate('restaurantId', 'name country')
-      .populate('items.menuItemId', 'name price image');
-    
-    res.json(populatedCart);
+    // Return appropriate response based on user role
+    if (['admin', 'manager'].includes(req.user.role)) {
+      // Return all carts for admin view
+      return getCart(req, res);
+    } else {
+      const populatedCart = await Cart.findById(cart._id)
+        .populate('restaurantId', 'name country')
+        .populate('items.menuItemId', 'name price image');
+      
+      res.json(populatedCart);
+    }
   } catch (error) {
     res.status(500).json({ message: 'Error updating cart item', error: error.message });
   }
@@ -153,7 +200,14 @@ export const removeFromCart = async (req, res) => {
   try {
     const { itemId } = req.params;
     
-    const cart = await Cart.findOne({ userId: req.user._id });
+    // For admin/manager, find cart by item ID across all carts
+    let cart;
+    if (['admin', 'manager'].includes(req.user.role)) {
+      cart = await Cart.findOne({ 'items._id': itemId });
+    } else {
+      cart = await Cart.findOne({ userId: req.user._id });
+    }
+    
     if (!cart) {
       return res.status(404).json({ message: 'Cart not found' });
     }
@@ -163,24 +217,33 @@ export const removeFromCart = async (req, res) => {
     // If no items left, delete the cart
     if (cart.items.length === 0) {
       await Cart.findByIdAndDelete(cart._id);
-      return res.json({
-        items: [],
-        subtotal: 0,
-        tax: 0,
-        deliveryFee: 0,
-        total: 0,
-        restaurantId: null,
-        restaurantName: null
-      });
+    } else {
+      await cart.save();
     }
     
-    await cart.save();
-    
-    const populatedCart = await Cart.findById(cart._id)
-      .populate('restaurantId', 'name country')
-      .populate('items.menuItemId', 'name price image');
-    
-    res.json(populatedCart);
+    // Return appropriate response based on user role
+    if (['admin', 'manager'].includes(req.user.role)) {
+      // Return all carts for admin view
+      return getCart(req, res);
+    } else {
+      if (cart.items.length === 0) {
+        return res.json({
+          items: [],
+          subtotal: 0,
+          tax: 0,
+          deliveryFee: 0,
+          total: 0,
+          restaurantId: null,
+          restaurantName: null
+        });
+      }
+      
+      const populatedCart = await Cart.findById(cart._id)
+        .populate('restaurantId', 'name country')
+        .populate('items.menuItemId', 'name price image');
+      
+      res.json(populatedCart);
+    }
   } catch (error) {
     res.status(500).json({ message: 'Error removing item from cart', error: error.message });
   }
@@ -188,10 +251,25 @@ export const removeFromCart = async (req, res) => {
 
 export const clearCart = async (req, res) => {
   try {
-    console.log(req.params)
-    const {_id} = req.params;
-    await Cart.findByIdAndDelete({_id});
-    console.log("🚀 ~ clearCart ~ _id:", _id)
+    // For admin/manager, clear all carts
+    if (['admin', 'manager'].includes(req.user.role)) {
+      await Cart.deleteMany({});
+      
+      return res.json({
+        message: 'All carts cleared successfully',
+        items: [],
+        subtotal: 0,
+        tax: 0,
+        deliveryFee: 0,
+        total: 0,
+        restaurantId: null,
+        restaurantName: null,
+        isAdminView: true
+      });
+    }
+    
+    // For regular users, clear their own cart
+    await Cart.findOneAndDelete({ userId: req.user._id });
     
     res.json({
       message: 'Cart cleared successfully',
@@ -205,5 +283,98 @@ export const clearCart = async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({ message: 'Error clearing cart', error: error.message });
+  }
+};
+
+// New endpoint for placing orders from selected items
+export const placeOrderFromCart = async (req, res) => {
+  try {
+    const { selectedItems, deliveryAddress, paymentMethod } = req.body;
+    
+    if (!selectedItems || selectedItems.length === 0) {
+      return res.status(400).json({ message: 'No items selected for order' });
+    }
+    
+    // Only admin/manager can place orders
+    if (!['admin', 'manager'].includes(req.user.role)) {
+      return res.status(403).json({ message: 'Only admin and manager can place orders' });
+    }
+    
+    // Group items by cart/user for separate orders
+    const ordersByCart = {};
+    
+    for (const itemId of selectedItems) {
+      const cart = await Cart.findOne({ 'items._id': itemId })
+        .populate('userId', 'name email')
+        .populate('restaurantId', 'name');
+      
+      if (!cart) continue;
+      
+      const item = cart.items.find(item => item._id.toString() === itemId);
+      if (!item) continue;
+      
+      const cartKey = cart._id.toString();
+      if (!ordersByCart[cartKey]) {
+        ordersByCart[cartKey] = {
+          userId: cart.userId._id,
+          restaurantId: cart.restaurantId._id,
+          restaurantName: cart.restaurantName,
+          items: [],
+          customer: cart.userId
+        };
+      }
+      
+      ordersByCart[cartKey].items.push(item);
+    }
+    
+    // Create orders for each cart
+    const createdOrders = [];
+    for (const [cartId, orderData] of Object.entries(ordersByCart)) {
+      const subtotal = orderData.items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+      const tax = subtotal * 0.1;
+      const deliveryFee = 2.99;
+      const total = subtotal + tax + deliveryFee;
+      
+      // Here you would create the actual order in your Order model
+      // For now, we'll simulate it
+      const order = {
+        // id: `order-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        userId: orderData.userId,
+        restaurantId: orderData.restaurantId,
+        restaurantName: orderData.restaurantName,
+        items: orderData.items,
+        subtotal,
+        tax,
+        deliveryFee,
+        total,
+        paymentMethod,
+        deliveryAddress,
+        status: 'pending',
+        createdAt: new Date()
+      };
+      
+      createdOrders.push(order);
+      await Order.insertMany(createdOrders)  
+      // Remove ordered items from cart
+      const cart = await Cart.findById(cartId);
+      if (cart) {
+        cart.items = cart.items.filter(item => 
+          !selectedItems.includes(item._id.toString())
+        );
+        
+        if (cart.items.length === 0) {
+          await Cart.findByIdAndDelete(cartId);
+        } else {
+          await cart.save();
+        }
+      }
+    }
+    
+    res.json({
+      message: `${createdOrders.length} order(s) placed successfully`,
+      orders: createdOrders
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Error placing order', error: error.message });
   }
 };
