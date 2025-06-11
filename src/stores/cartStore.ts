@@ -60,24 +60,53 @@ export const useCartStore = create<CartState>((set, get) => ({
       set({ isLoading: true });
       const response = await cartAPI.get();
       const cart = response.data;
-      
-      set({
-        restaurantId: cart.restaurantId?._id || null,
-        restaurantName: cart.restaurantName || null,
-        items: cart.items || [],
-        subtotal: cart.subtotal || 0,
-        tax: cart.tax || 0,
-        deliveryFee: cart.deliveryFee || 0,
-        total: cart.total || 0,
-        isAdminView: cart.isAdminView || false,
-        totalCarts: cart.totalCarts || 0,
+
+      if(cart.length == 0){
+        set({
+        restaurantId: null,
+        restaurantName: null,
+        items: [],
+        subtotal: 0,
+        tax: 0,
+        deliveryFee: 0,
+        total: 0,
+        isAdminView: false,
+        totalCarts: 0,
         selectedItems: [],
         isLoading: false
       });
+      }else{     
+        set({
+          restaurantId: cart.restaurantId?._id || null,
+          restaurantName: cart.restaurantName || null,
+          items: cart.items || [],
+          subtotal: cart.subtotal || 0,
+          tax: cart.tax || 0,
+          deliveryFee: cart.deliveryFee || 0,
+          total: cart.total || 0,
+          isAdminView: cart.isAdminView || false,
+          totalCarts: cart.totalCarts || 0,
+          selectedItems: [],
+          isLoading: false
+        });
+      }
     } catch (error: any) {
       console.error('Failed to fetch cart:', error);
       set({ isLoading: false });
-      toast.error('Failed to load cart');
+         set({
+        restaurantId: null,
+        restaurantName: null,
+        items: [],
+        subtotal: 0,
+        tax: 0,
+        deliveryFee: 0,
+        total: 0,
+        isAdminView: false,
+        totalCarts: 0,
+        selectedItems: [],
+        isLoading: false
+      });
+      // toast.error('Failed to load cart');
     }
   },
 

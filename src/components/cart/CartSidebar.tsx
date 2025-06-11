@@ -132,11 +132,11 @@ const CartSidebar = ({ isOpen, onClose }: CartSidebarProps) => {
               <h2 className="text-lg font-semibold text-neutral-900">
                 {isAdminView ? 'All Carts' : t('your_cart')}
               </h2>
-              {isAdminView && totalCarts > 0 && (
+              {/* {isAdminView && totalCarts > 0 && (
                 <span className="bg-primary-100 text-primary-700 text-xs px-2 py-1 rounded-full">
-                  {totalCarts} {totalCarts === 1 ? 'cart' : 'carts'}
+                  {totalCarts} {totalCarts == 1 ? 'cart' : 'carts'}
                 </span>
-              )}
+              )} */}
             </div>
             <button 
               onClick={onClose}

@@ -5,19 +5,17 @@ import Order from '../models/Order.js'
 export const getCart = async (req, res) => {
   try {
     // If user is admin or manager, get all carts
-    const country = req.user.country
+    const country = req.user.country || 'India'
     if (['admin', 'manager'].includes(req.user.role)) {
       const carts = await Cart.find({})
         .populate('userId', 'name email country')
         .populate({
           path: 'restaurantId',
           select: 'name country',
-          match: { country: country },
         })
         .populate('items.menuItemId', 'name price image')
         .sort({ updatedAt: -1 });
       
-      // Combine all cart items into a single response
       const allItems = [];
       let totalSubtotal = 0;
       let totalTax = 0;
@@ -26,21 +24,23 @@ export const getCart = async (req, res) => {
       
       carts.forEach(cart => {
         cart.items.forEach(item => {
+          if(cart.restaurantId.country == country){
           allItems.push({
-            ...item.toObject(),
-            cartId: cart._id,
-            userId: cart.userId._id,
-            userName: cart.userId.name,
-            userEmail: cart.userId.email,
-            userCountry: cart.userId.country,
-            restaurantName: cart.restaurantName,
-            restaurantCountry: cart.restaurantId.country
-          });
+              ...item.toObject(),
+              cartId: cart._id,
+              userId: cart.userId._id,
+              userName: cart.userId.name,
+              userEmail: cart.userId.email,
+              userCountry: cart.userId.country,
+              restaurantName: cart.restaurantName,
+              restaurantCountry: cart.restaurantId.country
+            });
+          }
+          totalSubtotal += cart.subtotal;
+          totalTax += cart.tax;
+          totalDeliveryFee += cart.deliveryFee;
+          totalAmount += cart.total;
         });
-        totalSubtotal += cart.subtotal;
-        totalTax += cart.tax;
-        totalDeliveryFee += cart.deliveryFee;
-        totalAmount += cart.total;
       });
       
       return res.json({
@@ -56,7 +56,6 @@ export const getCart = async (req, res) => {
       });
     }
     
-    // For regular users, get their own cart
     const cart = await Cart.findOne({ userId: req.user._id })
       .populate('restaurantId', 'name country')
       .populate('items.menuItemId', 'name price image');

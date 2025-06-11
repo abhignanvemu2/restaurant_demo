@@ -22,7 +22,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const { user, token } = response.data;
       localStorage.setItem('token', token);
       set({ user, initialized: true });
-      toast.success('Logged in successfully');
+      // toast.success('Logged in successfully');
       return true;
     } catch (error: any) {
       const message = error.response?.data?.message || 'Login failed';
@@ -51,7 +51,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       await authAPI.logout();
       localStorage.removeItem('token');
       set({ user: null });
-      toast.success('Logged out successfully');
+      // toast.success('Logged out successfully');
     } catch (error) {
       console.error('Logout failed:', error);
       localStorage.removeItem('token');
